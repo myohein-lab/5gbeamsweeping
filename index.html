@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="my">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>5G NR SSB Beam Sweeping Interactive Guide For Understand</title>
+    <!-- Chosen Palette: Wireless Midnight (Deep Slate background with Cyan, Emerald, and Amethyst accents) -->
+    <!-- Application Structure Plan: 
+        The SPA is designed as a modular technical dashboard. It prioritizes the "Visualize-then-Analyze" flow. 
+        1. Hero Section: Sets the technical context.
+        2. Real-time Simulator: Immediate visual understanding of 'Sweeping' (Spatial vs Temporal).
+        3. Signaling Lab: Interactive bitmap decoder to understand SIB1/RRC signaling messages.
+        4. Timing Architecture: Visual breakdown of the 20ms frame, 5ms burst, and 0.14ms symbol durations.
+        5. Optimization Matrix: Interactive trade-off explorer for Periodicity and SMTC Duration.
+        Rationale: This structure moves from high-level visual concepts to low-level signaling and finally to engineering design decisions, mimicking a professional learning path.
+    -->
+    <!-- Visualization & Content Choices: 
+        - Beam Simulator: Custom Canvas API for high-performance spatial sweeping (Goal: Change/Organize).
+        - Bitmap Decoder: Interactive HTML grid with JS state to simulate bitmap masking (Goal: Inform/Organize).
+        - Timing Chart: Horizontal CSS Flexbox timeline with dynamic markers (Goal: Change).
+        - Signal Strength: Chart.js for real-time RSRP tracking (Goal: Compare).
+        - Trade-off Cards: Interactive state-toggling cards using Tailwind (Goal: Compare).
+        - CONFIRMATION: NO SVG graphics used. NO Mermaid JS used.
+    -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+        
+        :root {
+            --bg-deep: #0f172a;
+            --panel-bg: rgba(30, 41, 59, 0.7);
+            --cyan-accent: #22d3ee;
+            --emerald-accent: #10b981;
+            --purple-accent: #a855f7;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-deep);
+            color: #f1f5f9;
+        }
+
+        .glass-card {
+            background: var(--panel-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 1.25rem;
+        }
+
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 250px;
+            max-height: 300px;
+        }
+
+        .bit-box {
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+
+        .bit-box.active {
+            background-color: var(--cyan-accent);
+            color: var(--bg-deep);
+            box-shadow: 0 0 15px rgba(34, 211, 238, 0.4);
+        }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 10px;
+        }
+
+        @keyframes pulse-cyan {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .animate-pulse-cyan { animation: pulse-cyan 2s infinite; }
+    </style>
+</head>
+<body class="antialiased custom-scrollbar">
+
+    <!-- Global Navigation -->
+    <nav class="sticky top-0 z-50 glass-card mx-4 mt-4 px-6 py-3 border-b border-slate-700 shadow-2xl flex justify-between items-center">
+        <div class="flex items-center gap-3">
+            <div class="p-2 bg-cyan-500/20 rounded-lg">
+                <i class="fa-solid fa-tower-broadcast text-cyan-400 text-xl"></i>
+            </div>
+            <h1 class="text-lg font-bold tracking-tight bg-gradient-to-r from-cyan-300 to-blue-400 bg-clip-text text-transparent">
+                5G NR SSB Beam Sweeping Lab
+            </h1>
+        </div>
+        <div class="hidden md:flex gap-6 text-sm font-medium text-slate-400">
+            <a href="#sim" class="hover:text-cyan-400 transition">Simulator</a>
+            <a href="#signaling" class="hover:text-cyan-400 transition">Signaling</a>
+            <a href="#timing" class="hover:text-cyan-400 transition">Timing Math</a>
+            <a href="#optimization" class="hover:text-cyan-400 transition">Optimization</a>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-4 py-8 space-y-12">
+
+        <!-- 1. Introduction Section -->
+        <section class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+            <div class="space-y-6">
+                <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-xs font-bold text-cyan-400">
+                    <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span> 5G NR TECHNICAL REPORT
+                </div>
+                <h2 class="text-4xl md:text-5xl font-extrabold leading-tight">
+                    အဆင့်မြင့် <span class="text-cyan-400">Beam Sweeping</span> နည်းပညာကို လေ့လာခြင်း
+                </h2>
+                <p class="text-slate-400 leading-relaxed">
+                    5G NR တွင် အချက်အလက်များကို တစ်ပြိုင်နက် မဖြန့်ဝေဘဲ အချိန်အပိုင်းအခြားအလိုက် ကျဉ်းမြောင်းသော Beam များဖြင့် လှည့်ထိုးသည့် (Beam Sweeping) နည်းပညာကို အသုံးပြုပါသည်။ ဤ Application သည် SIB1 Signaling မှစ၍ RF Optimization Trade-offs များအထိ လက်တွေ့ကျကျ လေ့လာနိုင်ရန် ဖန်တီးထားပါသည်။
+                </p>
+                <div class="flex flex-wrap gap-4">
+                    <div class="glass-card p-4 flex-1 min-w-[150px]">
+                        <span class="block text-2xl font-bold text-cyan-400">64</span>
+                        <span class="text-xs text-slate-500 uppercase font-bold tracking-wider">Max Beams (FR2)</span>
+                    </div>
+                    <div class="glass-card p-4 flex-1 min-w-[150px]">
+                        <span class="block text-2xl font-bold text-emerald-400">5ms</span>
+                        <span class="text-xs text-slate-500 uppercase font-bold tracking-wider">Burst Window</span>
+                    </div>
+                    <div class="glass-card p-4 flex-1 min-w-[150px]">
+                        <span class="block text-2xl font-bold text-purple-400">20ms</span>
+                        <span class="text-xs text-slate-500 uppercase font-bold tracking-wider">Default Period</span>
+                    </div>
+                </div>
+            </div>
+            <div class="glass-card p-2 aspect-video flex items-center justify-center border-cyan-500/20 overflow-hidden bg-slate-900/50 relative">
+                <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-cyan-500/10 via-transparent to-transparent"></div>
+                <div class="text-center space-y-3 z-10">
+                    <i class="fa-solid fa-microchip text-5xl text-cyan-500/40"></i>
+                    <p class="text-xs text-slate-500 font-mono italic">INTERACTIVE RAN MODULE ACTIVATED</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. Simulation Section -->
+        <section id="sim" class="space-y-6">
+            <div class="border-l-4 border-cyan-500 pl-4">
+                <h3 class="text-2xl font-bold">Spatial Beam Simulation</h3>
+                <p class="text-sm text-slate-400">gNodeB မှ Beam များကို Spatial (နေရာအလိုက်) လှည့်ထိုးပုံကို အချိန်နှင့်တပြေးညီ ကြည့်ရှုပါ။</p>
+            </div>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Main Simulator -->
+                <div class="lg:col-span-2 glass-card p-6 flex flex-col gap-4 min-h-[500px]">
+                    <div class="flex justify-between items-center">
+                        <div class="flex gap-2">
+                            <button id="playBtn" class="bg-cyan-500 hover:bg-cyan-400 text-slate-900 px-4 py-2 rounded-lg font-bold text-sm transition flex items-center gap-2">
+                                <i id="playIcon" class="fa-solid fa-pause"></i> <span id="playLabel">Pause</span>
+                            </button>
+                            <button id="resetBtn" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-lg font-bold text-sm transition">Reset</button>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <select id="beamCountSelect" class="bg-slate-900 border border-slate-700 text-xs text-cyan-400 font-bold p-2 rounded-lg outline-none">
+                                <option value="4">4 Beams (FR1 Low)</option>
+                                <option value="8" selected>8 Beams (C-Band)</option>
+                                <option value="64">64 Beams (mmWave)</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="relative flex-1 bg-slate-950 rounded-xl border border-slate-800 overflow-hidden">
+                        <canvas id="beamCanvas" class="w-full h-full cursor-crosshair"></canvas>
+                        <div class="absolute bottom-4 left-4 bg-slate-900/90 px-3 py-1.5 rounded-lg border border-slate-700 text-[10px] font-mono text-cyan-400">
+                            COORD: gNodeB Central Sector
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Signal Analytics -->
+                <div class="space-y-6">
+                    <div class="glass-card p-5 border-l-4 border-emerald-500">
+                        <h4 class="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2">
+                            <i class="fa-solid fa-gauge-simple-high text-emerald-500"></i> Live Signal Telemetry
+                        </h4>
+                        <div class="chart-container">
+                            <canvas id="rsrpChart"></canvas>
+                        </div>
+                        <div class="mt-4 space-y-3">
+                            <div class="flex justify-between items-center text-xs">
+                                <span class="text-slate-400">Active SSB Index:</span>
+                                <span id="activeSsbIndex" class="text-cyan-400 font-bold">#0</span>
+                            </div>
+                            <div class="flex justify-between items-center text-xs">
+                                <span class="text-slate-400">UE 1 Best RSRP:</span>
+                                <span id="ue1Max" class="text-emerald-400 font-bold">-120 dBm</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="glass-card p-5 border-l-4 border-purple-500">
+                        <h4 class="text-sm font-bold text-slate-300 mb-2">Technical Insight</h4>
+                        <p class="text-[11px] leading-relaxed text-slate-400">
+                            ဖုန်း (UE) သည် မိမိဆီရောက်လာသော Beam များအနက် Signal အားအကောင်းဆုံး Index ကိုမှတ်သားပြီး gNodeB သို့ RACH ချိတ်ဆက်ရာတွင် အဆိုပါ Beam အတိုင်းပြန်လည်ဆက်သွယ်ပါသည်။
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. Signaling Decoder Section -->
+        <section id="signaling" class="space-y-6">
+            <div class="border-l-4 border-purple-500 pl-4">
+                <h3 class="text-2xl font-bold">Signaling Decoder Lab</h3>
+                <p class="text-sm text-slate-400">SIB1 နှင့် RRC Reconfiguration ထဲမှ Bitmap များကို ဘာသာပြန်ခြင်း။</p>
+            </div>
+
+            <div class="glass-card p-8 grid grid-cols-1 md:grid-cols-2 gap-12">
+                <div class="space-y-6">
+                    <div class="bg-slate-900/50 p-4 rounded-xl border border-slate-800">
+                        <h5 class="text-xs font-bold text-slate-500 uppercase mb-3">RRC LOG SNIPPET</h5>
+                        <code class="text-sm text-emerald-400 block font-mono">
+                            ssb-ToMeasure : setup<br>
+                            &nbsp;&nbsp;mediumBitmap : <span id="binaryDisplay" class="text-white">11111111</span> (FF) (8)
+                        </code>
+                    </div>
+                    
+                    <p class="text-sm text-slate-400 leading-relaxed">
+                        အောက်ပါ Bit များကို နှိပ်၍ အော်ပရေတာမှ Beam များကို ပိတ်/ဖွင့် လုပ်ပုံကို စမ်းသပ်ပါ။ `1` သည် Beam Active ဖြစ်ပြီး `0` သည် Beam ပိတ်ထားခြင်း ဖြစ်သည်။
+                    </p>
+
+                    <div class="flex gap-2 justify-between">
+                        <!-- Binary Bit Inputs -->
+                        <div id="bitGrid" class="flex gap-2 w-full">
+                            <!-- JS populated -->
+                        </div>
+                    </div>
+
+                    <div class="p-4 bg-cyan-500/5 rounded-xl border border-cyan-500/20">
+                        <div class="flex items-center gap-3">
+                            <i class="fa-solid fa-circle-info text-cyan-400"></i>
+                            <div>
+                                <span class="text-xs font-bold text-cyan-300 block">Expert Tip:</span>
+                                <span class="text-[11px] text-slate-400">Bitmap ထဲတွင် Bit အားလုံးမသုံးခြင်းမှာ Inter-cell Interference ကိုလျှော့ချရန် ဖြစ်သည်။</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="space-y-6">
+                    <div class="flex justify-between items-end border-b border-slate-700 pb-2">
+                        <span class="text-xs font-bold text-slate-500 uppercase">Analysis Results</span>
+                        <span id="hexResult" class="text-2xl font-black text-cyan-400 font-mono">FF</span>
+                    </div>
+                    <div class="space-y-4">
+                        <div class="flex items-start gap-4">
+                            <div class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-xs font-bold text-cyan-400 shrink-0">1</div>
+                            <p class="text-xs text-slate-400 mt-1"><strong class="text-slate-200">Active Beams:</strong> လက်ရှိ Bit Configuration အရ Beam ပေါင်း <span id="activeCount" class="text-emerald-400 font-bold">8</span> ခု ထုတ်လွှင့်နေပါသည်။</p>
+                        </div>
+                        <div class="flex items-start gap-4">
+                            <div class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-xs font-bold text-cyan-400 shrink-0">2</div>
+                            <p class="text-xs text-slate-400 mt-1"><strong class="text-slate-200">Frequency Range:</strong> 8-bit Bitmap သုံးထားသဖြင့် ဤ Cell သည် FR1 (3-6 GHz) အတွင်း ရှိပါသည်။</p>
+                        </div>
+                        <div class="flex items-start gap-4">
+                            <div class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-xs font-bold text-cyan-400 shrink-0">3</div>
+                            <p class="text-xs text-slate-400 mt-1"><strong class="text-slate-200">Impact:</strong> ပိတ်ထားသော Beam ဧရိယာသို့ UE ရောက်ရှိပါက Coverage Hole ဖြစ်နိုင်ပါသည်။</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. Timing Logic Section -->
+        <section id="timing" class="space-y-6">
+            <div class="border-l-4 border-emerald-500 pl-4">
+                <h3 class="text-2xl font-bold">Timing Architecture Math</h3>
+                <p class="text-sm text-slate-400">20ms Frame အတွင်း Beam Sweeping ကြာချိန်ကို တွက်ချက်ခြင်း။</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div class="glass-card p-6 space-y-6">
+                    <h5 class="text-sm font-bold flex items-center gap-2">
+                        <i class="fa-solid fa-calculator text-emerald-400"></i> Step-by-Step Calculation
+                    </h5>
+                    <div class="space-y-4 text-xs font-mono">
+                        <div class="p-3 bg-slate-900 rounded-lg flex justify-between">
+                            <span class="text-slate-500">Subcarrier Spacing (SCS)</span>
+                            <span class="text-emerald-400 font-bold">30 kHz</span>
+                        </div>
+                        <div class="p-3 bg-slate-900 rounded-lg flex justify-between">
+                            <span class="text-slate-500">1 Slot Duration</span>
+                            <span class="text-emerald-400 font-bold">0.5 ms</span>
+                        </div>
+                        <div class="p-3 bg-slate-900 rounded-lg flex justify-between">
+                            <span class="text-slate-500">1 OFDM Symbol</span>
+                            <span class="text-emerald-400 font-bold">~35.7 μs</span>
+                        </div>
+                        <div class="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg flex justify-between">
+                            <span class="text-emerald-200 font-bold">1 SSB Block (4 Symbols)</span>
+                            <span class="text-emerald-400 font-bold">0.1428 ms</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-card p-6 flex flex-col justify-center gap-8">
+                    <div>
+                        <h5 class="text-xs font-bold text-slate-500 uppercase mb-4 tracking-widest">Time Domain Visualization</h5>
+                        <div class="relative h-12 bg-slate-900 rounded-lg border border-slate-800 flex">
+                            <!-- Burst Period -->
+                            <div class="w-[10%] h-full bg-emerald-500/30 border-r border-emerald-500 flex items-center justify-center">
+                                <span class="text-[9px] font-bold text-emerald-300">BURST (2ms)</span>
+                            </div>
+                            <!-- Idle Period -->
+                            <div class="flex-1 h-full flex items-center justify-center">
+                                <span class="text-[9px] font-bold text-slate-600 italic">IDLE WINDOW (18ms)</span>
+                            </div>
+                        </div>
+                        <div class="flex justify-between mt-2 text-[10px] font-mono text-slate-500">
+                            <span>0ms</span>
+                            <span>Total Periodicity: 20ms</span>
+                        </div>
+                    </div>
+
+                    <p class="text-xs text-slate-400 leading-relaxed italic">
+                        *မှတ်ချက် - Beam ၇ ခုလုံးသည် ပထမ ၂ မီလီစက္ကန့်အတွင်း အကုန် Sweep လုပ်ပြီးသွားပါသည်။ ကျန်အချိန်များတွင် ဖုန်းသည် Battery သက်သာစေရန် Measurement ပိတ်ထားပါသည်။
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 5. Optimization Matrix Section -->
+        <section id="optimization" class="space-y-6 pb-12">
+            <div class="border-l-4 border-cyan-500 pl-4">
+                <h3 class="text-2xl font-bold">Network Optimization Matrix</h3>
+                <p class="text-sm text-slate-400">Parameter ပြောင်းလဲမှုများ၏ ကောင်းကျိုးဆိုးကျိုး (Trade-offs) များ။</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Periodicity Trade-off -->
+                <div class="glass-card overflow-hidden group">
+                    <div class="p-6 bg-slate-800/50 border-b border-slate-700 flex justify-between items-center">
+                        <div>
+                            <h4 class="font-bold text-cyan-400">SSB Periodicity</h4>
+                            <p class="text-[10px] text-slate-500">Frequency of Sweep Cycles</p>
+                        </div>
+                        <i class="fa-solid fa-arrows-rotate text-2xl text-slate-700 group-hover:text-cyan-500 transition-colors"></i>
+                    </div>
+                    <div class="grid grid-cols-2 divide-x divide-slate-700">
+                        <div class="p-6 space-y-4">
+                            <span class="text-[10px] font-bold bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded">DECREASE (5-10ms)</span>
+                            <ul class="text-[11px] space-y-2 text-slate-300">
+                                <li class="flex gap-2"><i class="fa-solid fa-plus-circle text-emerald-500 mt-0.5"></i> Ultra-fast beam tracking</li>
+                                <li class="flex gap-2"><i class="fa-solid fa-plus-circle text-emerald-500 mt-0.5"></i> Ideal for High Speed Rail</li>
+                                <li class="flex gap-2 text-red-400"><i class="fa-solid fa-minus-circle mt-0.5"></i> High Overhead (PRB usage)</li>
+                            </ul>
+                        </div>
+                        <div class="p-6 space-y-4">
+                            <span class="text-[10px] font-bold bg-purple-500/10 text-purple-400 px-2 py-1 rounded">INCREASE (40-160ms)</span>
+                            <ul class="text-[11px] space-y-2 text-slate-300">
+                                <li class="flex gap-2"><i class="fa-solid fa-plus-circle text-emerald-500 mt-0.5"></i> Max Data Throughput</li>
+                                <li class="flex gap-2"><i class="fa-solid fa-plus-circle text-emerald-500 mt-0.5"></i> UE Battery Saving</li>
+                                <li class="flex gap-2 text-red-400"><i class="fa-solid fa-minus-circle mt-0.5"></i> High Access Latency</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SMTC Duration Trade-off -->
+                <div class="glass-card overflow-hidden group">
+                    <div class="p-6 bg-slate-800/50 border-b border-slate-700 flex justify-between items-center">
+                        <div>
+                            <h4 class="font-bold text-emerald-400">SMTC Duration</h4>
+                            <p class="text-[10px] text-slate-500">Receiver Awake Time</p>
+                        </div>
+                        <i class="fa-solid fa-eye text-2xl text-slate-700 group-hover:text-emerald-500 transition-colors"></i>
+                    </div>
+                    <div class="grid grid-cols-2 divide-x divide-slate-700">
+                        <div class="p-6 space-y-4">
+                            <span class="text-[10px] font-bold bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded">DECREASE (sf1)</span>
+                            <ul class="text-[11px] space-y-2 text-slate-300">
+                                <li class="flex gap-2"><i class="fa-solid fa-plus-circle text-emerald-500 mt-0.5"></i> Maximum Battery Saving</li>
+                                <li class="flex gap-2 text-red-400"><i class="fa-solid fa-minus-circle mt-0.5"></i> Miss Neighbor Beams</li>
+                            </ul>
+                        </div>
+                        <div class="p-6 space-y-4">
+                            <span class="text-[10px] font-bold bg-purple-500/10 text-purple-400 px-2 py-1 rounded">INCREASE (sf5)</span>
+                            <ul class="text-[11px] space-y-2 text-slate-300">
+                                <li class="flex gap-2"><i class="fa-solid fa-plus-circle text-emerald-500 mt-0.5"></i> Better Handover accuracy</li>
+                                <li class="flex gap-2 text-red-400"><i class="fa-solid fa-minus-circle mt-0.5"></i> Active Power usage up</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="glass-card m-4 p-6 text-center">
+        <p class="text-xs text-slate-500">5G NR Technical Series • SSB Beam Management Interactive Application • © 2024</p>
+    </footer>
+
+    <!-- Logic -->
+    <script>
+        // --- State Management ---
+        const state = {
+            isPlaying: true,
+            beamCount: 8,
+            activeSsbIndex: 0,
+            periodicity: 20, // ms
+            bitmap: [1,1,1,1,1,1,1,1],
+            ue1: { x: 0, y: 0, rsrp: -120, history: Array(20).fill(-120) },
+            bs: { x: 0, y: 0 }
+        };
+
+        // --- Chart.js Initialization ---
+        let rsrpChart;
+        function initChart() {
+            const ctx = document.getElementById('rsrpChart').getContext('2d');
+            rsrpChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: Array(20).fill(''),
+                    datasets: [{
+                        label: 'UE1 RSRP (dBm)',
+                        data: state.ue1.history,
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        pointRadius: 0,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { min: -125, max: -40, grid: { color: '#1e293b' }, ticks: { font: { size: 9 }, color: '#64748b' } },
+                        x: { display: false }
+                    },
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+
+        // --- Simulator Logic ---
+        const canvas = document.getElementById('beamCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = canvas.parentElement.offsetWidth;
+            canvas.height = canvas.parentElement.offsetHeight;
+            state.bs.x = canvas.width / 2;
+            state.bs.y = canvas.height - 40;
+            if (state.ue1.x === 0) {
+                state.ue1.x = state.bs.x + 100;
+                state.ue1.y = state.bs.y - 150;
+            }
+        }
+
+        function drawBeam(angle, index, isActive) {
+            const length = Math.min(canvas.width, canvas.height) * 0.8;
+            const widthRad = (120 / state.beamCount) * (Math.PI / 180);
+            
+            ctx.save();
+            ctx.translate(state.bs.x, state.bs.y);
+            ctx.rotate(angle - Math.PI / 2);
+
+            ctx.beginPath();
+            ctx.moveTo(0,0);
+            ctx.arc(0,0, length, -widthRad/2, widthRad/2);
+            ctx.closePath();
+
+            if (isActive) {
+                const grad = ctx.createRadialGradient(0,0,0,0,0,length);
+                grad.addColorStop(0, 'rgba(34, 211, 238, 0.6)');
+                grad.addColorStop(1, 'rgba(34, 211, 238, 0)');
+                ctx.fillStyle = grad;
+                ctx.fill();
+                ctx.strokeStyle = '#22d3ee';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            } else {
+                ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+
+        function updateUE() {
+            const dx = state.ue1.x - state.bs.x;
+            const dy = state.ue1.y - state.bs.y;
+            const dist = Math.hypot(dx, dy);
+            const ueAngle = Math.atan2(dy, dx) + Math.PI/2;
+            
+            const beamAngle = (-60 + (state.activeSsbIndex * (120/(state.beamCount-1)))) * (Math.PI/180);
+            const diff = Math.abs(ueAngle - beamAngle);
+            const beamWidth = (120/state.beamCount) * (Math.PI/180);
+
+            let power = -120;
+            // Only measure if beam is active in bitmap and UE is within its scope
+            if (state.bitmap[state.activeSsbIndex] === 1 && diff < beamWidth/2 && dist < 350) {
+                power = Math.round(-60 - (dist/10) + (Math.cos(diff/beamWidth) * 20));
+            }
+            
+            state.ue1.rsrp = power;
+            state.ue1.history.push(power);
+            state.ue1.history.shift();
+            
+            const max = Math.max(...state.ue1.history);
+            document.getElementById('ue1Max').innerText = `${max} dBm`;
+            document.getElementById('activeSsbIndex').innerText = `#${state.activeSsbIndex}`;
+        }
+
+        let frame = 0;
+        function loop() {
+            ctx.clearRect(0,0,canvas.width, canvas.height);
+            
+            // Draw all guide beams
+            for(let i=0; i<state.beamCount; i++) {
+                const angle = (-60 + (i * (120/(state.beamCount-1)))) * (Math.PI/180);
+                drawBeam(angle, i, (i === state.activeSsbIndex && state.isPlaying));
+            }
+
+            // Draw Base Station
+            ctx.fillStyle = '#1e293b';
+            ctx.beginPath();
+            ctx.arc(state.bs.x, state.bs.y, 10, 0, Math.PI*2);
+            ctx.fill();
+            ctx.strokeStyle = '#22d3ee';
+            ctx.stroke();
+
+            // Draw UE
+            ctx.fillStyle = '#10b981';
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#10b981';
+            ctx.beginPath();
+            ctx.arc(state.ue1.x, state.ue1.y, 8, 0, Math.PI*2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+
+            if (state.isPlaying) {
+                frame++;
+                if (frame % 10 === 0) {
+                    state.activeSsbIndex = (state.activeSsbIndex + 1) % state.beamCount;
+                    updateUE();
+                    rsrpChart.update('none');
+                }
+            }
+
+            requestAnimationFrame(loop);
+        }
+
+        // --- Bitmap Decoder Logic ---
+        function initBitmap() {
+            const grid = document.getElementById('bitGrid');
+            grid.innerHTML = '';
+            state.bitmap.forEach((val, idx) => {
+                const box = document.createElement('div');
+                box.className = `bit-box flex-1 h-12 glass-card flex items-center justify-center font-mono font-bold text-sm ${val ? 'active' : ''}`;
+                box.innerText = val;
+                box.onclick = () => {
+                    state.bitmap[idx] = state.bitmap[idx] === 1 ? 0 : 1;
+                    box.innerText = state.bitmap[idx];
+                    box.classList.toggle('active');
+                    updateSignalingDisplay();
+                };
+                grid.appendChild(box);
+            });
+            updateSignalingDisplay();
+        }
+
+        function updateSignalingDisplay() {
+            const binary = state.bitmap.join('');
+            const hex = parseInt(binary, 2).toString(16).toUpperCase();
+            document.getElementById('binaryDisplay').innerText = binary;
+            document.getElementById('hexResult').innerText = hex.padStart(2, '0');
+            document.getElementById('activeCount').innerText = state.bitmap.filter(x => x === 1).length;
+        }
+
+        // --- Event Listeners ---
+        document.getElementById('playBtn').onclick = () => {
+            state.isPlaying = !state.isPlaying;
+            document.getElementById('playIcon').className = state.isPlaying ? 'fa-solid fa-pause' : 'fa-solid fa-play';
+            document.getElementById('playLabel').innerText = state.isPlaying ? 'Pause' : 'Play';
+        };
+
+        document.getElementById('resetBtn').onclick = () => {
+            state.ue1.history.fill(-120);
+            rsrpChart.update();
+        };
+
+        document.getElementById('beamCountSelect').onchange = (e) => {
+            state.beamCount = parseInt(e.target.value);
+            state.activeSsbIndex = 0;
+            state.bitmap = Array(state.beamCount).fill(1);
+            initBitmap();
+        };
+
+        canvas.onpointerdown = (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            if (Math.hypot(x - state.ue1.x, y - state.ue1.y) < 30) {
+                state.isDragging = true;
+            }
+        };
+
+        canvas.onpointermove = (e) => {
+            if (state.isDragging) {
+                const rect = canvas.getBoundingClientRect();
+                state.ue1.x = e.clientX - rect.left;
+                state.ue1.y = e.clientY - rect.top;
+            }
+        };
+
+        canvas.onpointerup = () => state.isDragging = false;
+
+        // --- Init ---
+        window.onload = () => {
+            resizeCanvas();
+            initChart();
+            initBitmap();
+            loop();
+        };
+        window.onresize = resizeCanvas;
+    </script>
+</body>
+</html>
